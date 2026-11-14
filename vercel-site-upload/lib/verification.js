@@ -211,12 +211,41 @@ export const escape = input => String(input).replace(/[&<>"']/g, char => ({
   "'": '&#39;',
 })[char]);
 
-export const page = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#10131c"><title>${escape(title)} · Roblox Verification</title><style>:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#10131c;color:#f4f5f8}*{box-sizing:border-box}body{min-height:100vh;margin:0;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% -15%,#252b43 0,transparent 56%),#10131c}main{width:min(100%,520px);padding:clamp(28px,7vw,48px);border:1px solid #ffffff13;border-radius:24px;background:linear-gradient(145deg,#1d2230f5,#171b27f5);box-shadow:0 28px 90px #0006}.brand{margin-bottom:34px;color:#a99aff;font-size:12px;font-weight:750;letter-spacing:.16em}h1{margin:0;font-size:clamp(25px,5vw,32px);line-height:1.2;letter-spacing:-.04em}p{margin:14px 0 0;color:#b4bac8;font-size:15px;line-height:1.75}a{color:#c0b5ff}</style></head><body><main><div class="brand">ACCOUNT VERIFICATION</div>${body}</main></body></html>`;
+export const page = (title, body) => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111315">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <title>${escape(title)} · IDK Development</title>
+  <style>
+    :root{color-scheme:dark;font:16px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#111315;color:#f4f4f4}
+    *{box-sizing:border-box}
+    body{min-height:100vh;margin:0;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 76% 18%,#283236 0,transparent 42%),linear-gradient(135deg,#141718,#101112 62%,#171a1b)}
+    .shell{width:min(100%,480px)}
+    .brand{display:flex;align-items:center;gap:12px;margin:0 0 20px 4px;color:#e8e8e8;font-size:14px;font-weight:650;letter-spacing:.01em}
+    .brand img{width:38px;height:38px;object-fit:contain;padding:7px;border:1px solid #ffffff22;border-radius:12px;background:#1b1d1f}
+    main{padding:clamp(26px,6vw,40px);border:1px solid #ffffff20;border-radius:16px;background:linear-gradient(145deg,#1c1e20f5,#17191bf5);box-shadow:0 28px 80px #0007}
+    .eyebrow{margin-bottom:22px;color:#a5a7a9;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+    h1{margin:0;color:#f5f5f5;font-size:clamp(25px,5vw,31px);line-height:1.2;letter-spacing:-.035em}
+    p{margin:14px 0 0;color:#a7aaad;font-size:14px;line-height:1.7}
+    a{color:#e6e6e6}
+    @media(max-width:480px){body{padding:18px}.brand{margin-left:2px}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="brand"><img src="/favicon.png" alt=""><span>IDK Development</span></div>
+    <main><div class="eyebrow">Account verification</div>${body}</main>
+  </div>
+</body>
+</html>`;
 
 export function sendPage(res, status, title, body) {
   res.setHeader('cache-control', 'no-store');
   res.setHeader('x-content-type-options', 'nosniff');
   res.setHeader('referrer-policy', 'no-referrer');
-  res.setHeader('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'");
+  res.setHeader('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'");
   res.status(status).setHeader('content-type', 'text/html; charset=utf-8').send(page(title, body));
 }
