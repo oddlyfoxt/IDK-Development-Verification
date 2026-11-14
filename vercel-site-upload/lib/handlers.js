@@ -163,7 +163,7 @@ export async function robloxCallbackHandler(req, res) {
     }
 
     const profile = await exchangeRobloxCode(code, state.verifier);
-    await assignVerifiedRole(state.discordUserId, profile.sub);
+    await assignVerifiedRole(state.discordUserId, profile.sub, profile.preferred_username);
     return sendPage(res, 200, 'Verification complete', '<h1>Verification complete</h1><p>Your Roblox account was verified and your Discord roles were updated. You can return to Discord.</p>');
   } catch (error) {
     console.error('[verification] Roblox OAuth callback failed:', error);

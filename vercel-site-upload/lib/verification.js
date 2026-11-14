@@ -126,6 +126,9 @@ export async function exchangeRobloxCode(code, verifier) {
     headers: { authorization: `Bearer ${tokens.access_token}` },
   });
   if (!user.sub || !/^\d+$/.test(user.sub)) throw new Error('Roblox did not return a valid account ID');
+  if (typeof user.preferred_username !== 'string' || !/^[A-Za-z0-9_]{3,20}$/.test(user.preferred_username)) {
+    throw new Error('Roblox did not return a valid username');
+  }
   return user;
 }
 
@@ -142,9 +145,12 @@ async function discordRequest(url, method, body) {
   return response;
 }
 
-export async function assignVerifiedRole(discordUserId, robloxUserId) {
+export async function assignVerifiedRole(discordUserId, robloxUserId, robloxUsername) {
   if (!/^\d+$/.test(discordUserId) || !/^\d+$/.test(String(robloxUserId))) {
     throw new Error('Cannot assign a role without valid Discord and Roblox account IDs');
+  }
+  if (typeof robloxUsername !== 'string' || !/^[A-Za-z0-9_]{3,20}$/.test(robloxUsername)) {
+    throw new Error('Cannot log verification without a valid Roblox username');
   }
   const memberPath = `https://discord.com/api/v10/guilds/${encodeURIComponent(process.env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(discordUserId)}/roles`;
   const roleUrl = `${memberPath}/${encodeURIComponent(process.env.VERIFY_MEMBER_ROLE_ID)}`;
@@ -170,7 +176,21 @@ export async function assignVerifiedRole(discordUserId, robloxUserId) {
         `https://discord.com/api/v10/channels/${encodeURIComponent(logChannelId)}/messages`,
         'POST',
         {
-          content: `Member Verified\nDiscord User: <@${discordUserId}>\nRoblox User ID: ${robloxUserId}\nMethod: Roblox group\nVerified At: <t:${Math.floor(Date.now() / 1000)}:F>`,
+          flags: 1 << 15,
+          components: [{
+            type: 17,
+            components: [{
+              type: 10,
+              content: [
+                '## Member Verified',
+                `**Discord User:** <@${discordUserId}>`,
+                `**Roblox Username:** @${robloxUsername}`,
+                `**Roblox User ID:** \`${robloxUserId}\``,
+                '**Method:** Roblox',
+                `**Verified At:** <t:${Math.floor(Date.now() / 1000)}:F>`,
+              ].join('\n'),
+            }],
+          }],
           allowed_mentions: { parse: [] },
         }
       );
