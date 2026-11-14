@@ -4,7 +4,6 @@ const REQUIRED_ENVIRONMENT = [
   'ROBLOX_CLIENT_ID',
   'ROBLOX_CLIENT_SECRET',
   'ROBLOX_REDIRECT_URI',
-  'ROBLOX_GROUP_ID',
   'DISCORD_CLIENT_ID',
   'DISCORD_CLIENT_SECRET',
   'DISCORD_REDIRECT_URI',
@@ -17,9 +16,6 @@ const REQUIRED_ENVIRONMENT = [
 export function requireEnvironment() {
   for (const key of REQUIRED_ENVIRONMENT) {
     if (!process.env[key]) throw new Error(`Missing ${key}`);
-  }
-  if (!/^\d+$/.test(process.env.ROBLOX_GROUP_ID)) {
-    throw new Error('ROBLOX_GROUP_ID must contain only digits');
   }
   for (const key of ['DISCORD_GUILD_ID', 'VERIFY_MEMBER_ROLE_ID']) {
     if (!/^\d+$/.test(process.env[key])) throw new Error(`${key} must contain only digits`);
@@ -131,14 +127,6 @@ export async function exchangeRobloxCode(code, verifier) {
   });
   if (!user.sub || !/^\d+$/.test(user.sub)) throw new Error('Roblox did not return a valid account ID');
   return user;
-}
-
-export async function isGroupMember(robloxUserId) {
-  const result = await fetchJson(
-    `https://groups.roblox.com/v2/users/${encodeURIComponent(robloxUserId)}/groups/roles`
-  );
-  if (!Array.isArray(result.data)) throw new Error('Roblox group response was not in the expected format');
-  return result.data.some(entry => String(entry.group?.id) === process.env.ROBLOX_GROUP_ID);
 }
 
 async function discordRequest(url, method, body) {

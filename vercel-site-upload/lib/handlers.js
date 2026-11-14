@@ -4,7 +4,6 @@ import {
   challenge,
   exchangeDiscordCode,
   exchangeRobloxCode,
-  isGroupMember,
   openState,
   random,
   requireEnvironment,
@@ -164,12 +163,8 @@ export async function robloxCallbackHandler(req, res) {
     }
 
     const profile = await exchangeRobloxCode(code, state.verifier);
-    if (!(await isGroupMember(profile.sub))) {
-      return sendPage(res, 403, 'Group membership required', '<h1>Group membership required</h1><p>This Roblox account is not a member of the required group. Join the group and start verification again.</p>');
-    }
-
     await assignVerifiedRole(state.discordUserId, profile.sub);
-    return sendPage(res, 200, 'Verification complete', '<h1>Verification complete</h1><p>Your Roblox group membership was confirmed and your Discord roles were updated. You can return to Discord.</p>');
+    return sendPage(res, 200, 'Verification complete', '<h1>Verification complete</h1><p>Your Roblox account was verified and your Discord roles were updated. You can return to Discord.</p>');
   } catch (error) {
     console.error('[verification] Roblox OAuth callback failed:', error);
     return sendPage(res, 502, 'Verification unavailable', '<h1>Verification unavailable</h1><p>We could not complete verification. Please try again from Discord.</p>');
