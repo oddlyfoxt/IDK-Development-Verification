@@ -1,6 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    { "source": "/api/admin/callback", "destination": "/api/admin?__admin_route=callback" },
+    { "source": "/api/admin/config", "destination": "/api/admin?__admin_route=config" },
+    { "source": "/api/admin/guilds", "destination": "/api/admin?__admin_route=guilds" },
+    { "source": "/api/admin/login", "destination": "/api/admin?__admin_route=login" },
+    { "source": "/api/admin/logout", "destination": "/api/admin?__admin_route=logout" },
+    { "source": "/api/admin/options", "destination": "/api/admin?__admin_route=options" },
+    { "source": "/api/admin/profile", "destination": "/api/admin?__admin_route=profile" },
+    { "source": "/api/admin/session", "destination": "/api/admin?__admin_route=session" },
+    { "source": "/api/admin/stats", "destination": "/api/admin?__admin_route=stats" },
     { "source": "/verify", "destination": "/api/roblox/start" }
   ]
 }
