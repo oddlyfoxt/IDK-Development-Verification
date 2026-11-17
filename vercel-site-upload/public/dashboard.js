@@ -108,7 +108,7 @@ async function startDashboard() {
     logoutButton.classList.remove('hidden');
     document.querySelector('#user-name').textContent = `Signed in as ${user.username}`;
     if (!guilds.length) {
-      setNotice('No servers with Administrator permission were found.', true);
+      setNotice('No servers were found where you have Administrator permission and the bot is a member.', true);
       return;
     }
     guildSelect.replaceChildren(...guilds.map(guild => new Option(guild.name, guild.id)));

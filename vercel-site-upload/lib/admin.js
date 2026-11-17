@@ -7,8 +7,12 @@ const STATE_TTL_MS = 10 * 60_000;
 const SESSION_TTL_MS = 60 * 60_000;
 const ADMIN_PERMISSION = 8n;
 const ADMIN_GUILD_CACHE_TTL_MS = 15_000;
+const BOT_GUILD_CACHE_TTL_MS = 30_000;
+const BOT_GUILD_CHECK_CONCURRENCY = 5;
 const adminGuildCache = new Map();
 const adminGuildRequests = new Map();
+const botGuildCache = new Map();
+const botGuildRequests = new Map();
 
 function queryValue(req, key) {
   const value = req.query?.[key];
@@ -187,6 +191,66 @@ async function botGuildOptions(guildId) {
   };
 }
 
+async function botIsInGuild(guildId) {
+  const now = Date.now();
+  for (const [cachedGuildId, cached] of botGuildCache) {
+    if (cached.expiresAt <= now) botGuildCache.delete(cachedGuildId);
+  }
+  const cached = botGuildCache.get(guildId);
+  if (cached) return cached.isMember;
+
+  const pending = botGuildRequests.get(guildId);
+  if (pending) return pending;
+
+  const request = (async () => {
+    if (!process.env.DISCORD_TOKEN) {
+      const error = new Error('The dashboard bot token is not configured.');
+      error.status = 503;
+      throw error;
+    }
+    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
+      headers: { authorization: `Bot ${process.env.DISCORD_TOKEN}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (response.status === 404) {
+      botGuildCache.set(guildId, { isMember: false, expiresAt: Date.now() + BOT_GUILD_CACHE_TTL_MS });
+      return false;
+    }
+    if (!response.ok) {
+      const error = new Error(
+        response.status === 401
+          ? 'The dashboard bot token is invalid. Check DISCORD_TOKEN in the verification site settings.'
+          : `Discord could not check the dashboard bot’s server membership (HTTP ${response.status}).`,
+      );
+      error.status = 503;
+      throw error;
+    }
+    const guild = await response.json();
+    if (guild?.id !== guildId) {
+      const error = new Error('Discord returned invalid server membership data.');
+      error.status = 503;
+      throw error;
+    }
+    botGuildCache.set(guildId, { isMember: true, expiresAt: Date.now() + BOT_GUILD_CACHE_TTL_MS });
+    return true;
+  })().finally(() => botGuildRequests.delete(guildId));
+  botGuildRequests.set(guildId, request);
+  return request;
+}
+
+async function filterGuildsWithBot(guilds) {
+  const availableGuilds = [];
+  for (let index = 0; index < guilds.length; index += BOT_GUILD_CHECK_CONCURRENCY) {
+    const batch = guilds.slice(index, index + BOT_GUILD_CHECK_CONCURRENCY);
+    const checked = await Promise.all(batch.map(async guild => ({
+      guild,
+      isMember: await botIsInGuild(guild.id),
+    })));
+    availableGuilds.push(...checked.filter(item => item.isMember).map(item => item.guild));
+  }
+  return availableGuilds;
+}
+
 function methodNotAllowed(res, methods) {
   res.setHeader('allow', methods);
   return sendJson(res, 405, { error: 'Method not allowed.' });
@@ -282,7 +346,8 @@ export async function adminGuildsHandler(req, res) {
   try {
     const session = requireSession(req);
     const guilds = await adminGuilds(session);
-    const results = await Promise.all(guilds.map(async guild => ({
+    const availableGuilds = await filterGuildsWithBot(guilds);
+    const results = await Promise.all(availableGuilds.map(async guild => ({
       id: guild.id,
       name: guild.name,
       icon: guild.icon,
@@ -294,6 +359,7 @@ export async function adminGuildsHandler(req, res) {
     if (error.status === 429) {
       return sendJson(res, 503, { error: 'Discord is temporarily rate-limiting dashboard requests. Wait a few seconds and try again.' });
     }
+    if (error.status === 503) return sendJson(res, 503, { error: error.message });
     return sendJson(res, 401, { error: 'Could not load your servers. Sign in again or check the site configuration.' });
   }
 }
