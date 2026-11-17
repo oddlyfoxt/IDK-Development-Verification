@@ -6,6 +6,9 @@ const SESSION_COOKIE = 'idk_admin_session';
 const STATE_TTL_MS = 10 * 60_000;
 const SESSION_TTL_MS = 60 * 60_000;
 const ADMIN_PERMISSION = 8n;
+const ADMIN_GUILD_CACHE_TTL_MS = 15_000;
+const adminGuildCache = new Map();
+const adminGuildRequests = new Map();
 
 function queryValue(req, key) {
   const value = req.query?.[key];
@@ -61,7 +64,11 @@ async function discordJson(url, authorization) {
     headers: { authorization },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error(`Discord request failed with HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(`Discord request failed with HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
 }
 
@@ -86,25 +93,49 @@ async function exchangeAdminCode(code) {
 
 function requireSession(req) {
   const session = openState(cookieValue(req, SESSION_COOKIE));
-  if (!session || session.stage !== 'admin-session' || typeof session.accessToken !== 'string') {
+  if (
+    !session
+    || session.stage !== 'admin-session'
+    || typeof session.userId !== 'string'
+    || typeof session.accessToken !== 'string'
+  ) {
     throw new Error('Sign in with Discord to use the server dashboard.');
   }
   return session;
 }
 
 async function adminGuilds(session) {
-  const guilds = await discordJson(
-    'https://discord.com/api/v10/users/@me/guilds',
-    `Bearer ${session.accessToken}`,
-  );
-  if (!Array.isArray(guilds)) throw new Error('Discord returned an invalid server list');
-  return guilds.filter(guild => {
-    try {
-      return guild.owner === true || (BigInt(guild.permissions || '0') & ADMIN_PERMISSION) === ADMIN_PERMISSION;
-    } catch {
-      return false;
-    }
-  });
+  const now = Date.now();
+  for (const [userId, cached] of adminGuildCache) {
+    if (cached.expiresAt <= now) adminGuildCache.delete(userId);
+  }
+  const cached = adminGuildCache.get(session.userId);
+  if (cached) return cached.guilds;
+
+  const pending = adminGuildRequests.get(session.userId);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const guilds = await discordJson(
+      'https://discord.com/api/v10/users/@me/guilds',
+      `Bearer ${session.accessToken}`,
+    );
+    if (!Array.isArray(guilds)) throw new Error('Discord returned an invalid server list');
+    const manageableGuilds = guilds.filter(guild => {
+      try {
+        return guild.owner === true || (BigInt(guild.permissions || '0') & ADMIN_PERMISSION) === ADMIN_PERMISSION;
+      } catch {
+        return false;
+      }
+    });
+    adminGuildCache.set(session.userId, {
+      guilds: manageableGuilds,
+      expiresAt: Date.now() + ADMIN_GUILD_CACHE_TTL_MS,
+    });
+    return manageableGuilds;
+  })().finally(() => adminGuildRequests.delete(session.userId));
+  adminGuildRequests.set(session.userId, request);
+  return request;
 }
 
 async function authorizedGuild(req, guildId) {
@@ -250,6 +281,9 @@ export async function adminGuildsHandler(req, res) {
     return sendJson(res, 200, { guilds: results });
   } catch (error) {
     console.error('[admin] Could not load administrator servers:', error);
+    if (error.status === 429) {
+      return sendJson(res, 503, { error: 'Discord is temporarily rate-limiting dashboard requests. Wait a few seconds and try again.' });
+    }
     return sendJson(res, 401, { error: 'Could not load your servers. Sign in again or check the site configuration.' });
   }
 }
@@ -261,7 +295,11 @@ export async function adminOptionsHandler(req, res) {
     await authorizedGuild(req, guildId);
     return sendJson(res, 200, await botGuildOptions(guildId));
   } catch (error) {
-    return sendJson(res, 403, { error: error.message });
+    return sendJson(res, error.status === 429 ? 503 : 403, {
+      error: error.status === 429
+        ? 'Discord is temporarily rate-limiting dashboard requests. Wait a few seconds and try again.'
+        : error.message,
+    });
   }
 }
 
@@ -289,7 +327,6 @@ export async function adminConfigHandler(req, res) {
       logChannelId: String(input.logChannelId || ''),
       panelTitle: String(input.panelTitle || '').trim(),
       panelDescription: String(input.panelDescription || '').trim(),
-      panelColor: String(input.panelColor || ''),
     };
     if (!roleIds.has(config.verifiedRoleId)
       || (config.unverifiedRoleId && !roleIds.has(config.unverifiedRoleId))
@@ -301,7 +338,11 @@ export async function adminConfigHandler(req, res) {
     return sendJson(res, 200, { config });
   } catch (error) {
     console.error('[admin] Could not read or save server settings:', error);
-    return sendJson(res, 400, { error: error.message });
+    return sendJson(res, error.status === 429 ? 503 : 400, {
+      error: error.status === 429
+        ? 'Discord is temporarily rate-limiting dashboard requests. Wait a few seconds and try again.'
+        : error.message,
+    });
   }
 }
 
@@ -313,7 +354,11 @@ export async function adminStatsHandler(req, res) {
     const rows = await getVerificationStats(guildId, 90);
     return sendJson(res, 200, { stats: rows });
   } catch (error) {
-    return sendJson(res, 403, { error: error.message });
+    return sendJson(res, error.status === 429 ? 503 : 403, {
+      error: error.status === 429
+        ? 'Discord is temporarily rate-limiting dashboard requests. Wait a few seconds and try again.'
+        : error.message,
+    });
   }
 }
 

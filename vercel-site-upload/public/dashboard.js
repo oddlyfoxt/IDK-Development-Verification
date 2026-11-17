@@ -7,8 +7,6 @@ const configForm = document.querySelector('#config-form');
 const profileForm = document.querySelector('#profile-form');
 const saveConfigButton = document.querySelector('#save-config');
 const saveProfileButton = document.querySelector('#save-profile');
-const colorInput = document.querySelector('#panel-color');
-const colorLabel = document.querySelector('#panel-color-label');
 
 async function request(path, options = {}) {
   const response = await fetch(`/api/admin/${path}`, {
@@ -47,7 +45,6 @@ async function loadOptions(guildId) {
   const config = saved.config || {
     panelTitle: 'Roblox Verification',
     panelDescription: "Verify your Roblox account to receive this server's verified role.",
-    panelColor: '#D6A86A',
   };
   const roles = result.roles.filter(role => role.id !== guildId && !role.managed);
   fillSelect('verified-role', 'Choose verified role', roles, config.verifiedRoleId, role => role.name);
@@ -56,8 +53,6 @@ async function loadOptions(guildId) {
   fillSelect('log-channel', 'Choose log channel', result.channels, config.logChannelId, channel => `#${channel.name}`);
   document.querySelector('#panel-title').value = config.panelTitle;
   document.querySelector('#panel-description').value = config.panelDescription;
-  colorInput.value = config.panelColor.toLowerCase();
-  colorLabel.textContent = config.panelColor.toUpperCase();
   document.querySelector('#display-name').value = '';
   await loadStats(guildId);
   setNotice(saved.config ? 'Settings loaded.' : 'This server has not configured verification yet.');
@@ -138,7 +133,6 @@ configForm.addEventListener('submit', async event => {
       logChannelId: document.querySelector('#log-channel').value,
       panelTitle: document.querySelector('#panel-title').value.trim(),
       panelDescription: document.querySelector('#panel-description').value.trim(),
-      panelColor: colorInput.value.toUpperCase(),
     };
     await request('config', { method: 'PUT', body: JSON.stringify(payload) });
     setNotice('Verification settings saved. Run `/verification-panel` to publish the updated panel.');
@@ -166,7 +160,6 @@ profileForm.addEventListener('submit', async event => {
   }
 });
 
-colorInput.addEventListener('input', () => { colorLabel.textContent = colorInput.value.toUpperCase(); });
 logoutButton.addEventListener('click', async () => {
   logoutButton.disabled = true;
   try {

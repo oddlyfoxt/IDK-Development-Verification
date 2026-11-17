@@ -40,7 +40,7 @@ async function request(path, options = {}) {
 export async function getGuildConfig(guildId) {
   if (!isSnowflake(guildId)) throw new Error('Invalid Discord server ID');
   const query = new URLSearchParams({
-    select: 'guild_id,verified_role_id,unverified_role_id,panel_channel_id,log_channel_id,panel_title,panel_description,panel_color',
+    select: 'guild_id,verified_role_id,unverified_role_id,panel_channel_id,log_channel_id,panel_title,panel_description',
     guild_id: `eq.${guildId}`,
   });
   const response = await request(`verification_guilds?${query}`);
@@ -61,8 +61,6 @@ export async function getGuildConfig(guildId) {
     || typeof row.panel_description !== 'string'
     || row.panel_description.length < 1
     || row.panel_description.length > 500
-    || typeof row.panel_color !== 'string'
-    || !/^#[0-9A-Fa-f]{6}$/.test(row.panel_color)
   ) {
     throw new Error('Stored verification configuration is invalid');
   }
@@ -75,7 +73,6 @@ export async function getGuildConfig(guildId) {
     logChannelId: row.log_channel_id,
     panelTitle: row.panel_title,
     panelDescription: row.panel_description,
-    panelColor: row.panel_color,
   };
 }
 
@@ -94,8 +91,6 @@ export async function saveGuildConfig(config) {
     || typeof config.panelDescription !== 'string'
     || config.panelDescription.length < 1
     || config.panelDescription.length > 500
-    || typeof config.panelColor !== 'string'
-    || !/^#[0-9A-Fa-f]{6}$/.test(config.panelColor)
   ) {
     throw new Error('Invalid server verification configuration');
   }
@@ -110,7 +105,6 @@ export async function saveGuildConfig(config) {
       log_channel_id: config.logChannelId,
       panel_title: config.panelTitle,
       panel_description: config.panelDescription,
-      panel_color: config.panelColor,
     }),
   });
 }
