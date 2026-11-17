@@ -7,25 +7,23 @@ const REQUIRED_ENVIRONMENT = [
   'DISCORD_CLIENT_ID',
   'DISCORD_CLIENT_SECRET',
   'DISCORD_REDIRECT_URI',
-  'DISCORD_GUILD_ID',
   'DISCORD_TOKEN',
-  'VERIFY_MEMBER_ROLE_ID',
   'OAUTH_STATE_SECRET',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
 ];
 
 export function requireEnvironment() {
   for (const key of REQUIRED_ENVIRONMENT) {
     if (!process.env[key]) throw new Error(`Missing ${key}`);
   }
-  for (const key of ['DISCORD_GUILD_ID', 'VERIFY_MEMBER_ROLE_ID']) {
-    if (!/^\d+$/.test(process.env[key])) throw new Error(`${key} must contain only digits`);
+  let supabaseUrl;
+  try {
+    supabaseUrl = new URL(process.env.SUPABASE_URL);
+  } catch {
+    throw new Error('SUPABASE_URL must be an absolute HTTPS URL');
   }
-  if (process.env.VERIFY_UNVERIFIED_ROLE_ID && !/^\d+$/.test(process.env.VERIFY_UNVERIFIED_ROLE_ID)) {
-    throw new Error('VERIFY_UNVERIFIED_ROLE_ID must contain only digits');
-  }
-  if (process.env.VERIFY_LOG_CHANNEL_ID && !/^\d+$/.test(process.env.VERIFY_LOG_CHANNEL_ID)) {
-    throw new Error('VERIFY_LOG_CHANNEL_ID must contain only digits');
-  }
+  if (supabaseUrl.protocol !== 'https:') throw new Error('SUPABASE_URL must use HTTPS');
 
   validateRedirectUri(process.env.ROBLOX_REDIRECT_URI, '/api/roblox/callback', 'ROBLOX_REDIRECT_URI');
   validateRedirectUri(process.env.DISCORD_REDIRECT_URI, '/api/roblox/discord-callback', 'DISCORD_REDIRECT_URI');
@@ -145,20 +143,26 @@ async function discordRequest(url, method, body) {
   return response;
 }
 
-export async function assignVerifiedRole(discordUserId, robloxUserId, robloxUsername) {
+export async function assignVerifiedRole(config, discordUserId, robloxUserId, robloxUsername) {
+  if (!config || !/^\d{17,20}$/.test(config.guildId)
+    || !/^\d{17,20}$/.test(config.verifiedRoleId)
+    || !/^\d{17,20}$/.test(config.panelChannelId)
+    || !/^\d{17,20}$/.test(config.logChannelId)) {
+    throw new Error('Cannot assign a role without a valid server verification configuration');
+  }
   if (!/^\d+$/.test(discordUserId) || !/^\d+$/.test(String(robloxUserId))) {
     throw new Error('Cannot assign a role without valid Discord and Roblox account IDs');
   }
   if (typeof robloxUsername !== 'string' || !/^[A-Za-z0-9_]{3,20}$/.test(robloxUsername)) {
     throw new Error('Cannot log verification without a valid Roblox username');
   }
-  const memberPath = `https://discord.com/api/v10/guilds/${encodeURIComponent(process.env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(discordUserId)}/roles`;
-  const roleUrl = `${memberPath}/${encodeURIComponent(process.env.VERIFY_MEMBER_ROLE_ID)}`;
+  const memberPath = `https://discord.com/api/v10/guilds/${encodeURIComponent(config.guildId)}/members/${encodeURIComponent(discordUserId)}/roles`;
+  const roleUrl = `${memberPath}/${encodeURIComponent(config.verifiedRoleId)}`;
   const roleResponse = await discordRequest(roleUrl, 'PUT');
   if (!roleResponse.ok) throw new Error(`Discord could not assign the verified role (HTTP ${roleResponse.status})`);
 
-  const unverifiedRoleId = process.env.VERIFY_UNVERIFIED_ROLE_ID;
-  if (unverifiedRoleId && unverifiedRoleId !== process.env.VERIFY_MEMBER_ROLE_ID) {
+  const unverifiedRoleId = config.unverifiedRoleId;
+  if (unverifiedRoleId && unverifiedRoleId !== config.verifiedRoleId) {
     try {
       const response = await discordRequest(`${memberPath}/${encodeURIComponent(unverifiedRoleId)}`, 'DELETE');
       if (!response.ok) {
@@ -169,37 +173,34 @@ export async function assignVerifiedRole(discordUserId, robloxUserId, robloxUser
     }
   }
 
-  const logChannelId = process.env.VERIFY_LOG_CHANNEL_ID;
-  if (logChannelId) {
-    try {
-      const response = await discordRequest(
-        `https://discord.com/api/v10/channels/${encodeURIComponent(logChannelId)}/messages`,
-        'POST',
-        {
-          flags: 1 << 15,
+  try {
+    const response = await discordRequest(
+      `https://discord.com/api/v10/channels/${encodeURIComponent(config.logChannelId)}/messages`,
+      'POST',
+      {
+        flags: 1 << 15,
+        components: [{
+          type: 17,
           components: [{
-            type: 17,
-            components: [{
-              type: 10,
-              content: [
-                '## Member Verified',
-                `**Discord User:** <@${discordUserId}>`,
-                `**Roblox Username:** @${robloxUsername}`,
-                `**Roblox User ID:** \`${robloxUserId}\``,
-                '**Method:** Roblox',
-                `**Verified At:** <t:${Math.floor(Date.now() / 1000)}:F>`,
-              ].join('\n'),
-            }],
+            type: 10,
+            content: [
+              '## Member Verified',
+              `**Discord User:** <@${discordUserId}>`,
+              `**Roblox Username:** @${robloxUsername}`,
+              `**Roblox User ID:** \`${robloxUserId}\``,
+              '**Method:** Roblox',
+              `**Verified At:** <t:${Math.floor(Date.now() / 1000)}:F>`,
+            ].join('\n'),
           }],
-          allowed_mentions: { parse: [] },
-        }
-      );
-      if (!response.ok) {
-        console.error(`[verification] Member was verified, but log delivery failed with HTTP ${response.status}.`);
+        }],
+        allowed_mentions: { parse: [] },
       }
-    } catch (error) {
-      console.error('[verification] Member was verified, but log delivery failed:', error);
+    );
+    if (!response.ok) {
+      console.error(`[verification] Member was verified, but log delivery failed with HTTP ${response.status}.`);
     }
+  } catch (error) {
+    console.error('[verification] Member was verified, but log delivery failed:', error);
   }
 }
 
