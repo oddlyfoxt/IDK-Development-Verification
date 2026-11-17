@@ -160,8 +160,18 @@ async function botGuildOptions(guildId) {
       signal: AbortSignal.timeout(10_000),
     }),
   ]);
-  if (!rolesResponse.ok) throw new Error(`The bot could not list server roles (HTTP ${rolesResponse.status}).`);
-  if (!channelsResponse.ok) throw new Error(`The bot could not list server channels (HTTP ${channelsResponse.status}); check its server permissions.`);
+  if (!rolesResponse.ok) {
+    if (rolesResponse.status === 404) {
+      throw new Error('The dashboard bot cannot find this server. Make sure the bot configured with DISCORD_TOKEN is a member of this server.');
+    }
+    throw new Error(`The bot could not list server roles (HTTP ${rolesResponse.status}).`);
+  }
+  if (!channelsResponse.ok) {
+    if (channelsResponse.status === 404) {
+      throw new Error('The dashboard bot cannot find this server. Make sure the bot configured with DISCORD_TOKEN is a member of this server.');
+    }
+    throw new Error(`The bot could not list server channels (HTTP ${channelsResponse.status}); check its server permissions.`);
+  }
   const [roles, channels] = await Promise.all([rolesResponse.json(), channelsResponse.json()]);
   if (!Array.isArray(roles) || !Array.isArray(channels)) throw new Error('Discord returned invalid role or channel data.');
   return {
